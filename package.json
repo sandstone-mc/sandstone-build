@@ -4,9 +4,6 @@
   "description": "The Build component for the Sandstone CLI.",
   "type": "module",
   "exports": "./lib/index.js",
-  "bin": {
-    "sand-build": "./lib/index.js"
-  },
   "scripts": {
     "test": "echo NO TESTS",
     "build": "tsc"

@@ -591,7 +591,4 @@ function logError(err?: Error, file?: string) {
   }
 }
 
-process.on('unhandledRejection', logError)
-process.on('uncaughtException', logError)
-
-buildProject(JSON.parse(process.env.CLI_OPTIONS as string), JSON.parse(process.env.PROJECT_FOLDERS as string));
+buildProject(JSON.parse(process.env.CLI_OPTIONS as string), JSON.parse(process.env.PROJECT_FOLDERS as string) as ProjectFolders);
