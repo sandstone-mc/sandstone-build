@@ -57,21 +57,6 @@ function hash(stringToHash: string): string {
   return crypto.createHash('md5').update(stringToHash).digest('hex')
 }
 
-// Recursively create a directory, without failing if it already exists
-async function mkDir(dirPath: string) {
-  try {
-    await new Promise<void>((resolve, reject) => {
-      fs.mkdir(dirPath, { recursive: true }, (err) => {
-        if (err) reject(err)
-        resolve()
-      })
-    })
-  }
-  catch (error) {
-    // Directory already exists
-  }
-}
-
 let cache: SandstoneCache
 
 /**
@@ -348,7 +333,7 @@ async function _buildProject(cliOptions: BuildOptions, { absProjectFolder, proje
         // Not in cache: write to disk
         const realPath = path.join(outputFolder, relativePath)
 
-        await mkDir(path.dirname(realPath))
+        await fs.ensureDir(realPath.replace(/\/[^\/]+$/, ''))
         return await fs.writeFile(realPath, content)
       }
     })
@@ -398,7 +383,9 @@ async function _buildProject(cliOptions: BuildOptions, { absProjectFolder, proje
             // Not in cache: write to disk
             const realPath = path.join(outputFolder, relativePath)
 
-            await mkDir(path.dirname(realPath))
+            // TODO: Support symlinks
+
+            await fs.ensureDir(realPath.replace(/\/[^\/]+$/, ''))
             await fs.writeFile(realPath, content)
           }
         } catch (e) {}
@@ -444,7 +431,7 @@ async function _buildProject(cliOptions: BuildOptions, { absProjectFolder, proje
         )
       }
 
-      handleResources(packType.type)
+      await handleResources(packType.type)
 
       let archivedOutput = false
 
@@ -530,7 +517,7 @@ async function _buildProject(cliOptions: BuildOptions, { absProjectFolder, proje
         )
       }
 
-      handleResources(packType.type)
+      await handleResources(packType.type)
 
       if (packType.archiveOutput) {
         archiveOutput(packType)
