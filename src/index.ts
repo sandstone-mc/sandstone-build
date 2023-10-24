@@ -559,7 +559,7 @@ async function _buildProject(cliOptions: BuildOptions, { absProjectFolder, proje
   // Run the afterAll script
   await scripts?.afterAll?.()
 
-  console.log(`Pack(s) compiled! View output in ./.sandstone/output/`)
+  console.log('\nPack(s) compiled! View output in ./.sandstone/output/')
 }
 
 /**
