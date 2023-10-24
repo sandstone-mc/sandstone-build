@@ -5,11 +5,14 @@ import { pathToFileURL } from 'url'
 import fs from 'fs-extra'
 import PrettyError from 'pretty-error'
 import walk from 'klaw'
+import { register as tsEval } from 'ts-node'
 
 import chalk from 'chalk'
 import AdmZip from 'adm-zip'
 import deleteEmpty from 'delete-empty'
-import { ProjectFolders, getProjectFolders } from './utils.js'
+
+
+type ProjectFolders = { absProjectFolder: string, projectFolder: string, rootFolder: string, sandstoneConfigFolder: string }
 
 type BuildOptions = {
     // Flags
@@ -135,6 +138,14 @@ async function getClientPath() {
  * @param projectFolder The folder of the project. It needs a sandstone.config.ts, and it or one of its parent needs a package.json.
  */
 async function _buildProject(cliOptions: BuildOptions, { absProjectFolder, projectFolder, rootFolder, sandstoneConfigFolder }: ProjectFolders) {
+
+  // Register ts-node
+  const tsConfigPath = path.join(rootFolder, 'tsconfig.json')
+
+  tsEval({
+    transpileOnly: !cliOptions.strictErrors,
+    project: tsConfigPath,
+  })
 
   // First, read sandstone.config.ts to get all properties
   const sandstoneConfig = (await import(pathToFileURL(path.join(sandstoneConfigFolder, 'sandstone.config.ts')).toString())).default
@@ -583,4 +594,4 @@ function logError(err?: Error, file?: string) {
 process.on('unhandledRejection', logError)
 process.on('uncaughtException', logError)
 
-buildProject(JSON.parse(process.env.CLI_OPTIONS as string), getProjectFolders(process.env.PROJECT_FOLDER as string) as ProjectFolders);
+buildProject(JSON.parse(process.env.CLI_OPTIONS as string), JSON.parse(process.env.PROJECT_FOLDERS as string));
