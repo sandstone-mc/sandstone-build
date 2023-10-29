@@ -205,11 +205,9 @@ async function _buildProject(cliOptions: BuildOptions, { absProjectFolder, proje
     process.env.NAMESPACE = namespace
   }
 
-  for (const [k, pack] of Object.entries(sandstoneConfig.packs) as any[]) {
-    if (pack.onConflict) {
-      for (const resource of Object.entries(pack.onConflict)) {
-        process.env[`${resource[0].toUpperCase()}_CONFLICT_STRATEGY`] = resource[1] as string
-      }
+  if (sandstoneConfig.onConflict) {
+    for (const resource of Object.entries(sandstoneConfig.onConflict)) {
+      process.env[`${resource[0].toUpperCase()}_CONFLICT_STRATEGY`] = resource[1] as string
     }
   }
 
