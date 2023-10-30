@@ -383,7 +383,7 @@ async function _buildProject(cliOptions: BuildOptions, { absProjectFolder, proje
 
             // TODO: Support symlinks
 
-            await fs.ensureDir(realPath.replace(/\/[^\/]+$/, ''))
+            await fs.ensureDir(realPath.replace(/(?:\/|\\)(?:.(?!(?:\/|\\)))+$/, ''))
             await fs.writeFile(realPath, content)
           }
         } catch (e) {}
