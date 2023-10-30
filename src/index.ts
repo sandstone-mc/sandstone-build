@@ -331,7 +331,7 @@ async function _buildProject(cliOptions: BuildOptions, { absProjectFolder, proje
         // Not in cache: write to disk
         const realPath = path.join(outputFolder, relativePath)
 
-        await fs.ensureDir(realPath.replace(/\/[^\/]+$/, ''))
+        await fs.ensureDir(realPath.replace(/(?:\/|\\)(?:.(?!(?:\/|\\)))+$/, ''))
         return await fs.writeFile(realPath, content)
       }
     })
