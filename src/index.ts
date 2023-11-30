@@ -1,8 +1,5 @@
 import path from 'path'
-import * as os from 'os'
-import crypto from 'crypto'
 import { pathToFileURL } from 'url'
-import fs from 'fs-extra'
 import PrettyError from 'pretty-error'
 import walk from 'klaw'
 import { register as tsEval } from 'ts-node'
@@ -10,32 +7,27 @@ import { register as tsEval } from 'ts-node'
 import chalk from 'chalk'
 import AdmZip from 'adm-zip'
 import deleteEmpty from 'delete-empty'
+import { fs } from './opfs.js'
 
 
 type ProjectFolders = { absProjectFolder: string, projectFolder: string, rootFolder: string, sandstoneConfigFolder: string }
 
 type BuildOptions = {
-    // Flags
-    dry?: boolean
-    verbose?: boolean
-    root?: boolean
-    fullTrace?: boolean
-    strictErrors?: boolean
-    production?: boolean
-  
-    // Values
-    path: string
-    configPath: string
-    name?: string
-    namespace?: string
-    world?: string
-    clientPath?: string
-    serverPath?: string
+  // Flags
+  dry?: boolean
+  verbose?: boolean
+  root?: boolean
+  fullTrace?: boolean
+  strictErrors?: boolean
+  production?: boolean
 
-    // TODO: implement ssh
-    ssh?: any
+  // Values
+  path: string
+  configPath: string
+  name?: string
+  namespace?: string
 
-    dependencies?: [string, string][]
+  dependencies?: [string, string][]
 }
 
 const pe = new PrettyError()
@@ -44,75 +36,6 @@ type SaveFileObject = {
   relativePath: string
   content: any
   contentSummary: string
-}
-
-/*
- * Sandstone files cache is just a key-value pair,
- * key being the file path & value being the hash.
- */
-type SandstoneCache = Record<string, string>
-
-// Return the hash of a string
-function hash(stringToHash: string): string {
-  return crypto.createHash('md5').update(stringToHash).digest('hex')
-}
-
-let cache: SandstoneCache
-
-/**
- *
- * @param worldName The name of the world
- * @param minecraftPath The optional location of the .minecraft folder.
- * If left unspecified, the .minecraft will be found automatically.
- */
-async function getClientWorldPath(worldName: string, minecraftPath: string | undefined = undefined) {
-  let mcPath: string
-
-  if (minecraftPath) {
-    mcPath = minecraftPath
-  } else {
-    mcPath = (await getClientPath())!
-  }
-
-  const savesPath = path.join(mcPath, 'saves')
-  const worldPath = path.join(savesPath, worldName)
-
-  if (!fs.existsSync(worldPath)) {
-    const existingWorlds = (await fs.readdir(savesPath, { withFileTypes: true })).filter((f: any) => f.isDirectory).map((f: {name: string}) => f.name) as string[]
-
-    throw new Error(`Unable to locate the "${worldPath}" folder. Word ${worldName} does not exists. List of existing worlds: ${JSON.stringify(existingWorlds, null, 2)}`)
-  }
-
-  return worldPath
-}
-
-/**
- * Get the .minecraft path
- */
-async function getClientPath() {
-  function getMCPath(): string {
-    switch (os.platform()) {
-      case 'win32':
-        return path.join(os.homedir(), 'AppData/Roaming/.minecraft')
-      case 'darwin':
-        return path.join(os.homedir(), 'Library/Application Support/minecraft')
-      case 'linux':
-      default:
-        return path.join(os.homedir(), '.minecraft')
-    }
-  }
-
-  const mcPath = getMCPath()
-
-  try {
-    await fs.stat(mcPath)
-  } catch (e) {
-    console.warn('Unable to locate the .minecraft folder. Will not be able to export to client.')
-
-    return undefined
-  }
-
-  return mcPath
 }
 
 /**
@@ -144,43 +67,19 @@ async function _buildProject(cliOptions: BuildOptions, { absProjectFolder, proje
   const outputFolder = path.join(rootFolder, '.sandstone', 'output')
 
   /// OPTIONS ///
-  const clientPath = !cliOptions.production ? (cliOptions.clientPath || saveOptions.clientPath || await getClientPath()) : undefined
-  const server = !cliOptions.production && (cliOptions.serverPath || saveOptions.serverPath || cliOptions.ssh || saveOptions.ssh) ? await (async () => {
-    if (cliOptions.ssh || saveOptions.ssh) {
-      const sshOptions = JSON.stringify(await fs.readFile(cliOptions.ssh || saveOptions.ssh, 'utf8'))
 
-      // TODO: implement SFTP
-      return {
-        readFile: async (relativePath: string, encoding: fs.EncodingOption = 'utf8') => {},
-        writeFile: async (relativePath: string, contents: any) => {},
-        remove: async (relativePath: string) => {},
-      }
-    }
-    const serverPath = cliOptions.serverPath || saveOptions.serverPath
-    return {
-      readFile: async (relativePath: string, encoding: fs.EncodingOption = 'utf8') => await fs.readFile(path.join(serverPath, relativePath), encoding),
-      writeFile: async (relativePath: string, contents: any) => {
-        if (contents === undefined) {
-          await fs.unlink(path.join(serverPath, relativePath))
-        } else {
-          await fs.writeFile(path.join(serverPath, relativePath), contents)
-        }
-      },
-      remove: async (relativePath: string) => await fs.remove(path.join(serverPath, relativePath))
-    }
-  })() : undefined
-  let worldName: undefined | string = cliOptions.world || saveOptions.world
-  // Make sure the world exists
-  if (worldName && !cliOptions.production) {
-    await getClientWorldPath(worldName, clientPath)
+  let worldName: undefined | string = saveOptions.world
+  if (worldName) {
+    throw new Error('Client export is unsupported in the browser.')
   }
+
   const root = cliOptions.root !== undefined ? cliOptions.root : saveOptions.root
 
-  const packName: string = cliOptions.name ?? sandstoneConfig.name
-
-  if (worldName && root) {
-    throw new Error(`Expected only 'world' or 'root'. Got both.`)
+  if (root) {
+    throw new Error('Client export is unsupported in the browser.')
   }
+
+  const packName: string = cliOptions.name ?? sandstoneConfig.name
 
   // Important /!\: The below if statements, which set environment variables, must run before importing any Sandstone file.
 
@@ -258,26 +157,6 @@ async function _buildProject(cliOptions: BuildOptions, { absProjectFolder, proje
   }
 
   /// SAVING RESULTS ///
-  // Setup the cache if it doesn't exist.
-  // This cache is here to avoid writing files on disk when they did not change.
-  const newCache: SandstoneCache = {}
-
-  const cacheFile = path.join(rootFolder, '.sandstone', 'cache.json')
-
-  if (cache === undefined) {
-    let oldCache: SandstoneCache | undefined
-    try {
-      const fileRead = await fs.readFile(cacheFile, 'utf8')
-      if (fileRead) {
-        oldCache = JSON.parse(fileRead)
-      }
-    } catch {}
-    if (oldCache) {
-      cache = oldCache
-    } else {
-      cache = {}
-    }
-  }
 
   // Save the pack
 
@@ -317,18 +196,6 @@ async function _buildProject(cliOptions: BuildOptions, { absProjectFolder, proje
       }
 
       if (pathPass) {
-        // We hash the relative path alongside the content to ensure unique hash.
-        const hashValue = hash(content + relativePath)
-
-        // Add to new cache.
-        newCache[relativePath] = hashValue
-
-        if (cache[relativePath] === hashValue) {
-          // Already in cache - skip
-          return
-        }
-
-        // Not in cache: write to disk
         const realPath = path.join(outputFolder, relativePath)
 
         await fs.ensureDir(realPath.replace(/(?:\/|\\)(?:.(?!(?:\/|\\)))+$/, ''))
@@ -340,12 +207,7 @@ async function _buildProject(cliOptions: BuildOptions, { absProjectFolder, proje
   async function handleResources(packType: string) {
     const working = path.join(rootFolder, 'resources', packType)
 
-    let exists = false
-
-    try {
-      await fs.access(working)
-      exists = true
-    } catch (e) {}
+    let exists = await fs.pathExists(working)
 
     if (exists) {
       for await (const file of walk(path.join(rootFolder, 'resources', packType), { filter: (_path) => {
@@ -361,7 +223,7 @@ async function _buildProject(cliOptions: BuildOptions, { absProjectFolder, proje
         const relativePath = path.join(packType, file.path.split(working)[1])
 
         try {
-          let content = await fs.readFile(file.path)
+          let content = Buffer.from(await fs.readFile(file.path))
 
           if (fileHandlers) {
             for (const handler of fileHandlers) {
@@ -371,21 +233,10 @@ async function _buildProject(cliOptions: BuildOptions, { absProjectFolder, proje
             }
           }
 
-          // We hash the relative path alongside the content to ensure unique hash.
-          const hashValue = hash(content + relativePath)
+          const realPath = path.join(outputFolder, relativePath)
 
-          // Add to new cache.
-          newCache[relativePath] = hashValue
-
-          if (cache[relativePath] !== hashValue) {
-            // Not in cache: write to disk
-            const realPath = path.join(outputFolder, relativePath)
-
-            // TODO: Support symlinks
-
-            await fs.ensureDir(realPath.replace(/(?:\/|\\)(?:.(?!(?:\/|\\)))+$/, ''))
-            await fs.writeFile(realPath, content)
-          }
+          await fs.ensureDir(realPath.replace(/(?:\/|\\)(?:.(?!(?:\/|\\)))+$/, ''))
+          await fs.writeFile(realPath, content)
         } catch (e) {}
       }
     }
@@ -418,10 +269,10 @@ async function _buildProject(cliOptions: BuildOptions, { absProjectFolder, proje
       if (packType.handleOutput) {
         await packType.handleOutput(
           'output',
-          async (relativePath: string, encoding: fs.EncodingOption = 'utf8') => await fs.readFile(path.join(outputPath, relativePath), encoding),
+          async (relativePath: string, encoding: 'utf-8' | undefined = 'utf-8') => await fs.readFile(path.join(outputPath, relativePath), encoding),
           async (relativePath: string, contents: any) => {
             if (contents === undefined) {
-              await fs.unlink(path.join(outputPath, relativePath))
+              await fs.remove(path.join(outputPath, relativePath))
             } else {
               await fs.writeFile(path.join(outputPath, relativePath), contents)
             }
@@ -431,70 +282,8 @@ async function _buildProject(cliOptions: BuildOptions, { absProjectFolder, proje
 
       await handleResources(packType.type)
 
-      let archivedOutput = false
-
       if (packType.archiveOutput) {
-        archivedOutput = await archiveOutput(packType)
-      }
-
-      // Handle client
-      if (!(server && packType.networkSides === 'server') && clientPath) {
-        let fullClientPath: string
-
-        if (worldName) {
-          fullClientPath = path.join(clientPath, packType.clientPath)
-
-          try { fullClientPath = fullClientPath.replace('$packName$', packName) } catch {}
-          try { fullClientPath = fullClientPath.replace('$worldName$', worldName) } catch {}
-        } else {
-          fullClientPath = path.join(clientPath, packType.rootPath)
-
-          try { fullClientPath = fullClientPath.replace('$packName$', packName) } catch {}
-        }
-
-        if (packType.archiveOutput) {
-          if (archivedOutput) {
-            await fs.copyFile(`${path.join(outputFolder, 'archives', `${packName}_${packType.type}`)}.zip`, `${fullClientPath}.zip`)
-          }
-        } else {
-          await fs.remove(fullClientPath)
-
-          await fs.copy(outputPath, fullClientPath)
-        }
-
-        if (packType.handleOutput) {
-          await packType.handleOutput(
-            'client',
-            async (relativePath: string, encoding: fs.EncodingOption = 'utf8') => await fs.readFile(path.join(clientPath, relativePath), encoding),
-            async (relativePath: string, contents: any) => {
-              if (contents === undefined) {
-                fs.unlink(path.join(clientPath, relativePath))
-              } else {
-                await fs.writeFile(path.join(clientPath, relativePath), contents)
-              }
-            }
-          )
-        }
-      }
-
-      // Handle server
-      if (server && (packType.networkSides === 'server' || packType.networkSides === 'both')) {
-        let serverPath: string = packType.serverPath
-
-        try { serverPath = serverPath.replace('$packName$', packName) } catch {}
-
-        if (packType.archiveOutput && archivedOutput) {
-          await server.writeFile(await fs.readFile(`${outputPath}.zip`, 'utf8'), `${serverPath}.zip`)
-        } else {
-          server.remove(serverPath)
-          for await (const file of walk(outputPath)) {
-            await server.writeFile(path.join(serverPath, file.path.split(outputPath)[1]), await fs.readFile(file.path))
-          }
-        }
-
-        if (packType.handleOutput) {
-          await packType.handleOutput('server', server.readFile, server.writeFile)
-        }
+        await archiveOutput(packType)
       }
     }
   } else {
@@ -504,10 +293,10 @@ async function _buildProject(cliOptions: BuildOptions, { absProjectFolder, proje
       if (packType.handleOutput) {
         await packType.handleOutput(
           'output',
-          async (relativePath: string, encoding: fs.EncodingOption = 'utf8') => await fs.readFile(path.join(outputPath, relativePath), encoding),
+          async (relativePath: string, encoding: 'utf-8' | undefined = 'utf-8') => await fs.readFile(path.join(outputPath, relativePath), encoding),
           async (relativePath: string, contents: any) => {
             if (contents === undefined) {
-              await fs.unlink(path.join(outputPath, relativePath))
+              await fs.remove(path.join(outputPath, relativePath))
             } else {
               await fs.writeFile(path.join(outputPath, relativePath), contents)
             }
@@ -523,23 +312,7 @@ async function _buildProject(cliOptions: BuildOptions, { absProjectFolder, proje
     }
   }
 
-  // Delete old files that aren't cached anymore
-  const oldFilesNames = new Set<string>(Object.keys(cache))
-
-  Object.keys(newCache).forEach(name => oldFilesNames.delete(name))
-
-  for await (const name of oldFilesNames) {
-    await fs.rm(path.join(outputFolder, name))
-  }
-
   await deleteEmpty(outputFolder)
-
-
-  // Override old cache
-  cache = newCache
-
-  // Write the cache to disk
-  await fs.writeFile(cacheFile, JSON.stringify(cache))
 
   // Run the afterAll script
   await scripts?.afterAll?.()

@@ -1,7 +1,7 @@
 {
-  "name": "sandstone-build",
+  "name": "sandstone-build-web",
   "version": "1.0.7",
-  "description": "The Build component for the Sandstone CLI.",
+  "description": "The web version of the Build component for Sandstone.",
   "type": "module",
   "exports": "./lib/index.js",
   "scripts": {
