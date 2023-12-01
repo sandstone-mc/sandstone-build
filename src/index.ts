@@ -144,7 +144,7 @@ async function _buildProject(cliOptions: BuildOptions, { absProjectFolder, proje
   const outputFolder = path.join(rootFolder, '.sandstone', 'output')
 
   /// OPTIONS ///
-  const clientPath = !cliOptions.production ? (cliOptions.clientPath || saveOptions.clientPath || await getClientPath()) : undefined
+  const clientPath = !cliOptions.production ? (cliOptions.clientPath || (saveOptions.clientPath as string || undefined) || await getClientPath()) : undefined
   const server = !cliOptions.production && (cliOptions.serverPath || saveOptions.serverPath || cliOptions.ssh || saveOptions.ssh) ? await (async () => {
     if (cliOptions.ssh || saveOptions.ssh) {
       const sshOptions = JSON.stringify(await fs.readFile(cliOptions.ssh || saveOptions.ssh, 'utf8'))
@@ -544,7 +544,9 @@ async function _buildProject(cliOptions: BuildOptions, { absProjectFolder, proje
   // Run the afterAll script
   await scripts?.afterAll?.()
 
-  console.log('\nPack(s) compiled! View output in ./.sandstone/output/\n')
+  const exports = (server || clientPath) ? [...(server ? ['server'] : []), ...(clientPath ? ['client'] : [])].join(' and ') : false
+
+  console.log(`\nPack(s) compiled!${exports ? ` Exported to ${exports}.` : ''} View output in ./.sandstone/output/\n`)
 }
 
 /**
