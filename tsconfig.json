@@ -7,7 +7,6 @@
     "strict": true,
     "target": "es2019",
     "lib": [
-      "ESNext",
       "DOM",
       "DOM.Iterable"
     ],

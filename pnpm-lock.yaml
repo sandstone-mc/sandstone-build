@@ -17,6 +17,9 @@ dependencies:
   delete-empty:
     specifier: ^3.0.0
     version: 3.0.0
+  file-url:
+    specifier: ^4.0.0
+    version: 4.0.0
   fs-extra:
     specifier: ^11.1.1
     version: 11.1.1
@@ -29,6 +32,9 @@ dependencies:
   node-fetch:
     specifier: ^3.3.2
     version: 3.3.2
+  path-browserify:
+    specifier: ^1.0.1
+    version: 1.0.1
   pretty-error:
     specifier: ^4.0.0
     version: 4.0.0
@@ -274,6 +280,11 @@ packages:
       web-streams-polyfill: 3.2.1
     dev: false
 
+  /file-url@4.0.0:
+    resolution: {integrity: sha512-vRCdScQ6j3Ku6Kd7W1kZk9c++5SqD6Xz5Jotrjr/nkY714M14RFHy/AAVA2WQvpsqVAVgTbDrYyBpU205F0cLw==}
+    engines: {node: '>=12'}
+    dev: false
+
   /formdata-polyfill@4.0.10:
     resolution: {integrity: sha512-buewHzMvYL29jdeQTVILecSaZKnt/RJWjoZCF5OW60Z67/GmSLBkOFM7qh1PI3zFNtJbaZL5eQu1vLfazOwj4g==}
     engines: {node: '>=12.20.0'}
@@ -390,6 +401,10 @@ packages:
     resolution: {integrity: sha512-lNaJgI+2Q5URQBkccEKHTQOPaXdUxnZZElQTZY0MFUAuaEqe1E+Nyvgdz/aIyNi6Z9MzO5dv1H8n58/GELp3+w==}
     dependencies:
       wrappy: 1.0.2
+    dev: false
+
+  /path-browserify@1.0.1:
+    resolution: {integrity: sha512-b7uo2UCUOYZcnF/3ID0lulOJi/bafxa1xPe7ZPsammBSpjSWQkjNxlt635YGS2MiR9GjvuXCtz2emr3jbsz98g==}
     dev: false
 
   /path-is-absolute@1.0.1:

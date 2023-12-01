@@ -1,12 +1,10 @@
 import path from 'path'
-import { pathToFileURL } from 'url'
+import fileUrl from 'file-url'
 import PrettyError from 'pretty-error'
-import walk from 'klaw'
 import { register as tsEval } from 'ts-node'
 
 import chalk from 'chalk'
 import AdmZip from 'adm-zip'
-import deleteEmpty from 'delete-empty'
 import { fs } from './opfs.js'
 
 
@@ -56,7 +54,7 @@ async function _buildProject(cliOptions: BuildOptions, { absProjectFolder, proje
   })
 
   // First, read sandstone.config.ts to get all properties
-  const sandstoneConfig = (await import(pathToFileURL(path.join(sandstoneConfigFolder, 'sandstone.config.ts')).toString())).default
+  const sandstoneConfig = (await import(fileUrl(path.join(sandstoneConfigFolder, 'sandstone.config.js')))).default
 
   const { scripts } = sandstoneConfig
 
@@ -132,12 +130,12 @@ async function _buildProject(cliOptions: BuildOptions, { absProjectFolder, proje
 
   let sandstonePack: any
 
-  const filePath = path.join(projectFolder, 'index.ts')
+  const filePath = path.join(projectFolder, 'index.js')
 
   try {
     // Sometimes, a file might not exist because it has been deleted.
     if (await fs.pathExists(filePath)) {
-      sandstonePack = (await import(pathToFileURL(filePath).toString())).default
+      sandstonePack = (await import(fileUrl(filePath))).default
     }
   }
   catch (e: any) {
@@ -210,7 +208,7 @@ async function _buildProject(cliOptions: BuildOptions, { absProjectFolder, proje
     let exists = await fs.pathExists(working)
 
     if (exists) {
-      for await (const file of walk(path.join(rootFolder, 'resources', packType), { filter: (_path) => {
+      for await (const entry of fs.walk(path.join(rootFolder, 'resources', packType), { filter: (_path) => {
         const relativePath = path.join(packType, _path.split(working)[1])
         let pathPass = true
         if (fileExclusions && fileExclusions.existing) {
@@ -220,10 +218,11 @@ async function _buildProject(cliOptions: BuildOptions, { absProjectFolder, proje
         }
         return pathPass
       }})) {
-        const relativePath = path.join(packType, file.path.split(working)[1])
+        const relativePath = path.join(packType, entry.path.split(working)[1])
 
         try {
-          let content = Buffer.from(await fs.readFile(file.path))
+          const rawContent = await entry.file()
+          let content = Buffer.from(rawContent as unknown as string)
 
           if (fileHandlers) {
             for (const handler of fileHandlers) {
@@ -311,8 +310,6 @@ async function _buildProject(cliOptions: BuildOptions, { absProjectFolder, proje
       }
     }
   }
-
-  await deleteEmpty(outputFolder)
 
   // Run the afterAll script
   await scripts?.afterAll?.()

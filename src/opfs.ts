@@ -71,23 +71,31 @@ class fsClass {
         }
     }
 
-    async readFile(path: string, encoding?: 'utf-8') {
-        const rootHandle = await this.rootHandle()
-        const folders = path.split('/')
+    async readFile(path: string | File, encoding?: 'utf-8') {
+        let fileContents: File = path as File
 
-        const file = folders.pop() as string
+        if (typeof path === 'string') {
+            const rootHandle = await this.rootHandle()
+            const folders = path.split('/')
 
-        let currentHandle = rootHandle
+            const file = folders.pop() as string
 
-        for (const folder of folders) {
-            currentHandle = await currentHandle.getDirectoryHandle(folder, { create: false })
+            let currentHandle = rootHandle
+
+            for (const folder of folders) {
+                currentHandle = await currentHandle.getDirectoryHandle(folder, { create: false })
+            }
+
+            const fileHandle = await currentHandle.getFileHandle(file, { create: false })
+
+            fileContents = await fileHandle.getFile()
         }
 
-        const fileHandle = await currentHandle.getFileHandle(file, { create: false })
-
-        const fileContents = await fileHandle.getFile()
-
-        return await fileContents.arrayBuffer()
+        if (encoding === undefined || encoding === 'utf-8') {
+            return await fileContents.text()
+        } else {
+            return await fileContents.arrayBuffer()
+        }
     }
 
     async readdir(path: string) {
@@ -130,6 +138,54 @@ class fsClass {
 
             await currentHandle.removeEntry(dirHandle.name, { recursive: true })
         }
+    }
+
+    get walk () {
+        const fs = this
+
+        async function* walker(path: string, options?: { filter?: (path: string) => boolean }): AsyncGenerator<{ path: string, file: () => Promise<string | ArrayBuffer> }> {
+            const rootHandle = await fs.rootHandle()
+            const folders = path.split('/')
+
+            let currentHandle = rootHandle
+
+            for (const folder of folders) {
+                currentHandle = await currentHandle.getDirectoryHandle(folder, { create: false })
+            }
+
+            const entries: [string, FileSystemHandleKind][] = []
+
+            for await (const entry of currentHandle.values()) {
+                entry.kind
+                entries.push([entry.name, entry.kind])
+            }
+
+            for await (const [entry, type] of entries) {
+                if (options?.filter && !options.filter(path + '/' + entry)) {
+                    continue
+                }
+                if (type === 'file') {
+                    const fileHandle = await currentHandle.getFileHandle(entry, { create: false })
+
+                    const out = {
+                        path: path + '/' + entry,
+                        file: async () => await fs.readFile(await fileHandle.getFile())
+                    }
+
+                    yield out
+                } else {
+                    await currentHandle.getDirectoryHandle(entry, { create: false })
+
+                    const newWalker = walker(path + '/' + entry)
+
+                    for await (const entry of newWalker) {
+                        yield entry
+                    }
+                }
+            }
+        }
+
+        return walker
     }
 }
 

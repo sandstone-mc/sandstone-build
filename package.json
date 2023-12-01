@@ -42,10 +42,12 @@
     "chalk": "^5.3.0",
     "chalk-template": "^1.1.0",
     "delete-empty": "^3.0.0",
+    "file-url": "^4.0.0",
     "fs-extra": "^11.1.1",
     "klaw": "^4.1.0",
     "nanoid": "^4.0.2",
     "node-fetch": "^3.3.2",
+    "path-browserify": "^1.0.1",
     "pretty-error": "^4.0.0",
     "ts-node": "^10.9.1"
   },
