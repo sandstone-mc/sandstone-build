@@ -508,7 +508,9 @@ async function _buildProject(cliOptions: BuildOptions, { absProjectFolder, proje
 
             await fs.copy(outputPath, fullClientPath)
           } else {
-            await fs.createSymlink(outputPath, fullClientPath)
+            try {
+              await fs.createSymlink(outputPath, fullClientPath)
+            } catch (e) {}
           }
         }
 
