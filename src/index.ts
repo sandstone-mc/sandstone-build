@@ -15,27 +15,43 @@ import deleteEmpty from 'delete-empty'
 type ProjectFolders = { absProjectFolder: string, projectFolder: string, rootFolder: string, sandstoneConfigFolder: string }
 
 type BuildOptions = {
-    // Flags
-    dry?: boolean
-    verbose?: boolean
-    root?: boolean
-    fullTrace?: boolean
-    strictErrors?: boolean
-    production?: boolean
-  
-    // Values
-    path: string
-    configPath: string
-    name?: string
-    namespace?: string
-    world?: string
-    clientPath?: string
-    serverPath?: string
+  // Flags
+  dry?: boolean
+  verbose?: boolean
+  root?: boolean
+  fullTrace?: boolean
+  strictErrors?: boolean
+  production?: boolean
 
-    // TODO: implement ssh
-    ssh?: any
+  // Values
+  path: string
+  configPath: string
+  name?: string
+  namespace?: string
+  world?: string
+  clientPath?: string
+  serverPath?: string
 
-    dependencies?: [string, string][]
+  // TODO: implement ssh
+  ssh?: any
+
+  enableSymlinks?: boolean
+
+  dependencies?: [string, string][]
+}
+
+type SaveOptions = BuildOptions & {
+  indentation?: `${number}`
+
+  resources?: {
+    exclude?: RegExp | RegExp[] | { generated?: RegExp | RegExp[], existing?: RegExp | RegExp[] }
+    handle?: {
+      path: RegExp
+      callback: (contents: string | Buffer | Promise<Buffer>) => Promise<Buffer>
+    }[]
+  }
+
+  customFileHandler: (relativePath: string, content: any) => Promise<void>
 }
 
 const pe = new PrettyError()
@@ -137,9 +153,7 @@ async function _buildProject(cliOptions: BuildOptions, { absProjectFolder, proje
 
   const { scripts } = sandstoneConfig
 
-  let { saveOptions } = sandstoneConfig
-
-  if (saveOptions === undefined) saveOptions = {}
+  let saveOptions = (sandstoneConfig.saveOptions || {}) as SaveOptions
 
   const outputFolder = path.join(rootFolder, '.sandstone', 'output')
 
@@ -156,7 +170,7 @@ async function _buildProject(cliOptions: BuildOptions, { absProjectFolder, proje
         remove: async (relativePath: string) => {},
       }
     }
-    const serverPath = cliOptions.serverPath || saveOptions.serverPath
+    const serverPath = (cliOptions.serverPath || saveOptions.serverPath) as string
     return {
       readFile: async (relativePath: string, encoding: fs.EncodingOption = 'utf8') => await fs.readFile(path.join(serverPath, relativePath), encoding),
       writeFile: async (relativePath: string, contents: any) => {
@@ -212,7 +226,7 @@ async function _buildProject(cliOptions: BuildOptions, { absProjectFolder, proje
   }
 
   // JSON indentation
-  process.env.INDENTATION = saveOptions.indentation
+  if (saveOptions.indentation) process.env.INDENTATION = saveOptions.indentation
 
   // Pack mcmeta
   process.env.PACK_OPTIONS = JSON.stringify(sandstoneConfig.packs)
@@ -287,7 +301,9 @@ async function _buildProject(cliOptions: BuildOptions, { absProjectFolder, proje
   const excludeOption = saveOptions.resources?.exclude
 
   const fileExclusions = excludeOption ? {
+    /* @ts-ignore */
     generated: (excludeOption.generated || excludeOption) as RegExp[] | undefined,
+    /* @ts-ignore */
     existing: (excludeOption.existing || excludeOption) as RegExp[] | undefined
   } : false
 
@@ -407,8 +423,34 @@ async function _buildProject(cliOptions: BuildOptions, { absProjectFolder, proje
     return false
   }
 
-  // TODO: implement linking to make the cache more useful when not archiving.
   if (!cliOptions.production) {
+    // TODO: Add heuristic to detect if symlinks are available on Windows
+
+    let enableSymlinks: boolean | undefined
+
+    if (saveOptions.enableSymlinks) enableSymlinks = true
+
+    if (cliOptions.enableSymlinks !== undefined) enableSymlinks = cliOptions.enableSymlinks
+
+    if (clientPath && (enableSymlinks === undefined ? os.platform() !== 'win32' : enableSymlinks)) {
+      const symlinkPath = path.join(clientPath, 'allowed_symlinks.txt')
+
+      let symlinks: string[] = []
+
+      if (await fs.exists(symlinkPath)) {
+        symlinks = (await fs.readFile(symlinkPath, 'utf8')).split('\n').filter(s => s !== '')
+      }
+
+      const symlink = `[glob]${outputFolder}/**`
+
+      if (!symlinks.includes(symlink)) {
+        console.log('Adding output path to allowed_symlinks. Unfortunately, because of a limitation set by Mojang, you must restart the game in-order for this change to take effect. (Unless you have allowed all paths)')
+        symlinks.push(symlink)
+
+        await fs.writeFile(symlinkPath, symlinks.join('\n'))
+      }
+    }
+
     for await (const _packType of packTypes) {
       const packType = _packType[1]
       const outputPath = path.join(outputFolder, packType.type)
@@ -454,12 +496,20 @@ async function _buildProject(cliOptions: BuildOptions, { absProjectFolder, proje
 
         if (packType.archiveOutput) {
           if (archivedOutput) {
-            await fs.copyFile(`${path.join(outputFolder, 'archives', `${packName}_${packType.type}`)}.zip`, `${fullClientPath}.zip`)
+            if (os.platform() === 'win32') {
+              await fs.copyFile(`${path.join(outputFolder, 'archives', `${packName}_${packType.type}`)}.zip`, `${fullClientPath}.zip`)
+            } else {
+              await fs.createSymlink(`${path.join(outputFolder, 'archives', `${packName}_${packType.type}`)}.zip`, `${fullClientPath}.zip`)
+            }
           }
         } else {
-          await fs.remove(fullClientPath)
+          if (os.platform() === 'win32') {
+            await fs.remove(fullClientPath)
 
-          await fs.copy(outputPath, fullClientPath)
+            await fs.copy(outputPath, fullClientPath)
+          } else {
+            await fs.createSymlink(outputPath, fullClientPath)
+          }
         }
 
         if (packType.handleOutput) {

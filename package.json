@@ -1,6 +1,6 @@
 {
   "name": "sandstone-build",
-  "version": "1.0.8",
+  "version": "1.1.0",
   "description": "The Build component for the Sandstone CLI.",
   "type": "module",
   "exports": "./lib/index.js",
